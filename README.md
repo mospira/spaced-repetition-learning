@@ -8,15 +8,23 @@ A lightweight command-line tool for mastering LeetCode-style data structures and
 
 This tool helps you practice LeetCode problems more effectively using spaced repetition. When you attempt a problem, rate yourself from `1-5`:
 
-| Rating | Meaning                            | Next Attempt |
-| ------ | ---------------------------------- | ------------ |
-| 1      | Couldn’t solve / needed a solution | 1 day        |
-| 2      | Solved with significant struggle   | 2 days       |
-| 3      | Solved with minor struggle         | 3 days       |
-| 4      | Solved smoothly with few gaps      | 4 days       |
-| 5      | Solved perfectly, confidently      | 5 days       |
+| Rating | Meaning | First interval | Later interval |
+| ------ | ------- | -------------- | -------------- |
+| 1 | No viable approach without help | 1 day | Reset to 1 day |
+| 2 | Partial approach, too slow, or TLE | 3 days | Reset to 3 days |
+| 3 | Passed, but reasoning was fragile or non-optimal | 7 days | Previous interval × 1.5, capped at 21 days |
+| 4 | Optimal approach identified quickly, with implementation gaps | 14 days | Previous interval × 2, capped at 60 days |
+| 5 | Fluent optimal solution with only trivial mistakes | 30 days | Previous interval × 2.5, capped at 120 days |
 
-If you rate a problem `5` two times in a row, it’s considered mastered and moved to the **mastered list**.
+Ratings are based on the unaided attempt, not the corrected solution after
+hints or debugging. Only use `srl add 1-5` after an implementation attempt;
+lightweight recall has a separate command. A problem becomes mastered after a rating of `5` that
+follows at least 30 actual days of spacing. Mastered problems remain available
+for audits.
+
+Missing a due date does not count as failure. The problem stays overdue, its
+priority increases naturally, and the next interval starts on the date it is
+actually reviewed.
 
 ## Data Storage
 
@@ -58,7 +66,7 @@ Create a venv or use `--system` for system wide installation
    ```bash
    srl nextup add -f starter_data/neetcode_150.csv
    ```
-2. View today’s work
+2. View today’s bounded daily plan
 
    ```bash
    srl list
@@ -70,7 +78,7 @@ Create a venv or use `--system` for system wide installation
    ```
 
    > by default this adds a rating to the first problem from `srl list`
-4. Rinse and repeat daily
+4. Rinse and repeat daily. Do not double the next day's workload after a miss.
 
 ## Usage
 
@@ -127,10 +135,14 @@ srl remove -n 3
 srl list
 ```
 
-Lists all problems scheduled for today as a numbered list, sorted by:
+By default, the daily plan selects at most eight due reviews with a mix of weak
+problems, medium-strength problems, and rating-5 mastery candidates. Ratings
+`1` through `3` are labeled as full solves, with targeted planning guidance;
+ratings `4` and `5` are eligible for quick recall.
 
-1. Earliest last attempt.
-2. Lower ratings first.
+The title reports both the selected work and the complete overdue count, for
+example `8 reviews, 0 new; 67 overdue`. Audits are suppressed automatically
+while the overdue queue exceeds the daily review limit.
 
 Problems whose most recent rating was 5 are marked with a asterisk (*) to indicate a _mastery attempt_.
 
@@ -140,7 +152,60 @@ You can limit the number of problems shown:
 srl list -n 3
 ```
 
-If no problems are due today, it will fall back to showing problems from the Next Up queue.
+Next Up admission is capacity-aware:
+
+- Up to 12 overdue reviews: admit up to two new problems.
+- 13–24 overdue reviews: admit at most one new problem.
+- More than 24 overdue reviews: pause new-problem admission.
+
+These thresholds and limits are configurable.
+
+---
+
+### Record a Quick Recall
+
+Problems whose last submitted rating was `4` or `5` can use a lightweight
+conceptual check. Without looking at code, recall the approach, invariant,
+complexity, and important edge cases.
+
+Record a successful recall for the first eligible problem in today's plan:
+
+```bash
+srl recall pass
+```
+
+Target the number displayed by `srl list` or a problem name:
+
+```bash
+srl recall pass -n 3
+srl recall fail -p "Two Sum"
+```
+
+A recall pass preserves the last submission rating and defers the next full
+solve by the current interval. It does not expand the interval and cannot grant
+mastery; the next due review must be a submitted full solve. A recall failure
+records no submission rating, schedules a full solve for tomorrow, resets
+interval growth on that submission, and prevents the immediate follow-up from
+granting mastery.
+
+Problems rated `1` through `3` require a submitted solution and cannot use the
+recall command.
+
+---
+
+### Rebalance an Existing Backlog
+
+Spread all currently overdue problems across future days without recording
+fake attempts or ratings:
+
+```bash
+srl rebalance --daily-cap 8
+```
+
+The command creates a backup first, retains at most eight rebalanced reviews on
+each day, and merges any problem found in both mastered and in-progress data.
+Use `--start-date YYYY-MM-DD` to choose the first day or `--no-backup` to skip
+the automatic backup.
 
 ---
 
@@ -160,7 +225,8 @@ Shows all problems that are currently in progress (not yet mastered) as a number
 srl mastered
 ```
 
-Shows all problems you’ve marked as mastered (achieved `5` twice in a row).
+Shows problems mastered by earning a rating of `5` after at least 30 days of
+actual spacing.
 
 Filter by fuzzy search:
 
@@ -322,6 +388,27 @@ Set to 0 to disable the max days check and rely solely on probability:
 
 ```bash
 srl config --max-days-without-audit 0
+```
+
+Configure the daily review and new-problem limits:
+
+```bash
+srl config --daily-review-limit 6 --new-problem-limit 2
+```
+
+Configure backlog admission thresholds:
+
+```bash
+srl config --overdue-reduce-new-threshold 12 \
+  --overdue-pause-new-threshold 24
+```
+
+By default, audits are suppressed when overdue reviews exceed the daily review
+limit. Toggle that behavior with:
+
+```bash
+srl config --allow-audits-when-overdue
+srl config --suppress-audits-when-overdue
 ```
 
 Configure the maximum number of backups to retain for `srl backup create` (default is 10):

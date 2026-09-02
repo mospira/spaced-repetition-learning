@@ -241,3 +241,38 @@ def test_summary_from_date(parser):
     assert args.command == "summary"
     assert hasattr(args, "handler")
     assert args.from_date == "2024-01-15"
+
+
+def test_rebalance_command(parser):
+    args = parser.parse_args(["rebalance", "--daily-cap", "6"])
+    assert args.command == "rebalance"
+    assert args.daily_cap == 6
+    assert hasattr(args, "handler")
+
+
+def test_config_scheduler_limits(parser):
+    args = parser.parse_args(
+        [
+            "config",
+            "--daily-review-limit",
+            "6",
+            "--new-problem-limit",
+            "2",
+        ]
+    )
+    assert args.daily_review_limit == 6
+    assert args.new_problem_limit == 2
+
+
+def test_recall_pass_by_number(parser):
+    args = parser.parse_args(["recall", "pass", "-n", "3"])
+    assert args.command == "recall"
+    assert args.result == "pass"
+    assert args.number == 3
+    assert hasattr(args, "handler")
+
+
+def test_recall_fail_by_problem(parser):
+    args = parser.parse_args(["recall", "fail", "-p", "Two Sum"])
+    assert args.result == "fail"
+    assert args.name == "Two Sum"

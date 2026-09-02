@@ -100,11 +100,9 @@ def test_should_audit_probability(monkeypatch):
     assert list_.should_audit() is False
 
 
-def test_list_triggers_audit(console, monkeypatch):
+def test_list_triggers_audit(console, monkeypatch, mature_problem):
     problem = "Audit Problem"
-    args = SimpleNamespace(name=problem, rating=5)
-    add.handle(args=args, console=console)
-    add.handle(args=args, console=console)  # move to mastered
+    mature_problem(problem)
 
     monkeypatch.setattr(list_, "should_audit", lambda: True)
 
@@ -123,7 +121,7 @@ def test_list_indicate_mastered(console, backdate_problem, monkeypatch):
     problem = "Mastered attempt"
     args = SimpleNamespace(name=problem, rating=5)
     add.handle(args=args, console=console)
-    backdate_problem(problem, 7)
+    backdate_problem(problem, 31)
 
     args = SimpleNamespace()
     list_.handle(args=args, console=console)
@@ -328,3 +326,29 @@ def test_should_audit_probability_fallback_when_recent_audit(
 
     # Should use probability (100%) since max days not breached
     assert list_.should_audit() is True
+
+
+def test_should_audit_suppressed_when_backlog_exceeds_daily_limit(
+    monkeypatch, mock_data, dump_json
+):
+    from datetime import date, timedelta
+
+    old = (date.today() - timedelta(days=10)).isoformat()
+    dump_json(
+        mock_data.PROGRESS_FILE,
+        {
+            f"problem-{index}": {"history": [{"rating": 1, "date": old}]}
+            for index in range(9)
+        },
+    )
+    dump_json(
+        mock_data.CONFIG_FILE,
+        {
+            "audit_probability": 1.0,
+            "daily_review_limit": 8,
+            "suppress_audits_when_overdue": True,
+        },
+    )
+    monkeypatch.setattr(list_.random, "random", lambda: 0.0)
+
+    assert list_.should_audit() is False

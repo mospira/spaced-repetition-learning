@@ -69,6 +69,29 @@ def test_config_get(console):
     assert isinstance(data["calendar_colors"], dict)
     parsed_keys = {int(k) for k in data["calendar_colors"].keys()}
     assert parsed_keys == {0, 1, 2, 3}
+    assert data["daily_review_limit"] == 8
+    assert data["new_problem_limit"] == 2
+    assert data["overdue_reduce_new_threshold"] == 12
+    assert data["overdue_pause_new_threshold"] == 24
+    assert data["suppress_audits_when_overdue"] is True
+
+
+def test_set_scheduler_limits(mock_data, console, load_json):
+    args = _make_args(
+        daily_review_limit=6,
+        new_problem_limit=1,
+        overdue_reduce_new_threshold=10,
+        overdue_pause_new_threshold=20,
+        suppress_audits_when_overdue=False,
+    )
+    config.handle(args, console)
+
+    data = load_json(mock_data.CONFIG_FILE)
+    assert data["daily_review_limit"] == 6
+    assert data["new_problem_limit"] == 1
+    assert data["overdue_reduce_new_threshold"] == 10
+    assert data["overdue_pause_new_threshold"] == 20
+    assert data["suppress_audits_when_overdue"] is False
 
 
 def test_reset_colors(mock_data, console, load_json):

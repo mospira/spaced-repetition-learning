@@ -6,7 +6,6 @@ from srl.commands.audit.utils import (
     random_audit,
     get_last_audit_date,
 )
-from datetime import datetime, timedelta
 import random
 from srl.storage import (
     load_json,
@@ -14,6 +13,12 @@ from srl.storage import (
     PROGRESS_FILE,
 )
 from srl.commands.config import Config
+from srl import storage
+from srl.scheduling import (
+    due_candidates,
+    new_problem_allowance,
+    select_balanced_reviews,
+)
 
 
 def add_subparser(subparsers):
@@ -48,23 +53,50 @@ def handle(args, console: Console):
             )
             return
 
-    target_num: int | None = getattr(args, "n", None)
-    problems = get_due_problems(target_num)
-    if not problems:
+    cfg = Config.load()
+    requested: int | None = getattr(args, "n", None)
+    review_limit = requested if requested is not None else cfg.daily_review_limit
+
+    progress = load_json(PROGRESS_FILE)
+    all_due = due_candidates(progress, today())
+    selected = select_balanced_reviews(all_due, review_limit)
+
+    plan = [
+        (candidate.name, candidate.url, candidate.review_mode, "review")
+        for candidate in selected
+    ]
+
+    allowance = new_problem_allowance(len(all_due), cfg)
+    if requested is not None:
+        allowance = min(allowance, max(0, requested - len(plan)))
+
+    next_up = load_json(NEXT_UP_FILE)
+    for name, info in list(next_up.items())[:allowance]:
+        plan.append((name, info.get("url", ""), "new problem", "new"))
+
+    if not plan:
         console.print("[bold green]No problems due today or in Next Up.[/bold green]")
         return
 
     masters = mastery_candidates()
     lines = []
-    for i, (name, url) in enumerate(problems, start=1):
+    for i, (name, url, mode, source) in enumerate(plan, start=1):
         mark = " [magenta]*[/magenta]" if name in masters else ""
         display = format_problem(name, url)
-        lines.append(f"{i}. {display}{mark}")
+        style = "cyan" if source == "new" else "dim"
+        lines.append(f"{i}. {display}{mark} [{style}]{mode}[/{style}]")
+
+    review_count = sum(1 for *_, source in plan if source == "review")
+    new_count = len(plan) - review_count
+    status = f"{review_count} review(s), {new_count} new; {len(all_due)} overdue"
 
     console.print(
         Panel.fit(
             "\n".join(lines),
-            title=f"[bold blue]Problems to Practice [{today().isoformat()}] ({len(problems)})[/bold blue]",
+            title=(
+                f"[bold blue]Problems to Practice [{today().isoformat()}] "
+                f"({len(plan)}) - {status}[/bold blue]"
+            ),
             border_style="blue",
             title_align="left",
         )
@@ -73,6 +105,13 @@ def handle(args, console: Console):
 
 def should_audit():
     cfg = Config.load()
+
+    if cfg.suppress_audits_when_overdue:
+        overdue_count = len(
+            due_candidates(storage.load_json(storage.PROGRESS_FILE), today())
+        )
+        if overdue_count > cfg.daily_review_limit:
+            return False
 
     # Check max days without audit first
     if cfg.max_days_without_audit and cfg.max_days_without_audit > 0:
@@ -101,24 +140,10 @@ def get_due_problems(limit: int | None = None) -> list[tuple[str, str]]:
         limit: Maximum number of problems to return. If ``None``, returns all due
             problems, or all Nextup Queue problems if no due problems exist.
     """
-    data = load_json(PROGRESS_FILE)
-    due = []
-
-    for name, info in data.items():
-        url = info.get("url", "")
-        history = info["history"]
-        if not history:
-            continue
-        last = history[-1]
-        last_date = datetime.fromisoformat(last["date"]).date()
-        due_date = last_date + timedelta(days=last["rating"])
-        if due_date <= today():
-            due.append((name, url, last_date, last["rating"]))
-
-    # Sort: older last attempt first, then lower rating
-    due.sort(key=lambda x: (x[2], x[3]))
-
-    result = [(name, url) for name, url, _, _ in due[:limit]]
+    cfg = Config.load()
+    candidates = due_candidates(load_json(PROGRESS_FILE), today())
+    selected = select_balanced_reviews(candidates, limit)
+    result = [(candidate.name, candidate.url) for candidate in selected]
 
     if limit is None:
         if result:
@@ -133,7 +158,9 @@ def get_due_problems(limit: int | None = None) -> list[tuple[str, str]]:
 
     next_up = load_json(NEXT_UP_FILE)
 
-    remaining = limit - len(result)
+    remaining = min(
+        limit - len(result), new_problem_allowance(len(candidates), cfg)
+    )
 
     supplement = [
         (prob, info.get("url", "")) for prob, info in list(next_up.items())[:remaining]
