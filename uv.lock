@@ -113,7 +113,7 @@ wheels = [
 
 [[package]]
 name = "srl"
-version = "21.0.0"
+version = "21.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "rich" },

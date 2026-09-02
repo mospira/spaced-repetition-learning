@@ -17,7 +17,8 @@ This tool helps you practice LeetCode problems more effectively using spaced rep
 | 5 | Fluent optimal solution with only trivial mistakes | 30 days | Previous interval × 2.5, capped at 120 days |
 
 Ratings are based on the unaided attempt, not the corrected solution after
-hints or debugging. A problem becomes mastered after a rating of `5` that
+hints or debugging. Only use `srl add 1-5` after an implementation attempt;
+lightweight recall has a separate command. A problem becomes mastered after a rating of `5` that
 follows at least 30 actual days of spacing. Mastered problems remain available
 for audits.
 
@@ -135,9 +136,9 @@ srl list
 ```
 
 By default, the daily plan selects at most eight due reviews with a mix of weak
-problems, medium-strength problems, and rating-5 mastery candidates. Each item
-is labeled with its recommended review depth: full solve, targeted weak spot,
-pseudocode, or quick recall.
+problems, medium-strength problems, and rating-5 mastery candidates. Ratings
+`1` through `3` are labeled as full solves, with targeted planning guidance;
+ratings `4` and `5` are eligible for quick recall.
 
 The title reports both the selected work and the complete overdue count, for
 example `8 reviews, 0 new; 67 overdue`. Audits are suppressed automatically
@@ -158,6 +159,37 @@ Next Up admission is capacity-aware:
 - More than 24 overdue reviews: pause new-problem admission.
 
 These thresholds and limits are configurable.
+
+---
+
+### Record a Quick Recall
+
+Problems whose last submitted rating was `4` or `5` can use a lightweight
+conceptual check. Without looking at code, recall the approach, invariant,
+complexity, and important edge cases.
+
+Record a successful recall for the first eligible problem in today's plan:
+
+```bash
+srl recall pass
+```
+
+Target the number displayed by `srl list` or a problem name:
+
+```bash
+srl recall pass -n 3
+srl recall fail -p "Two Sum"
+```
+
+A recall pass preserves the last submission rating and defers the next full
+solve by the current interval. It does not expand the interval and cannot grant
+mastery; the next due review must be a submitted full solve. A recall failure
+records no submission rating, schedules a full solve for tomorrow, resets
+interval growth on that submission, and prevents the immediate follow-up from
+granting mastery.
+
+Problems rated `1` through `3` require a submitted solution and cannot use the
+recall command.
 
 ---
 

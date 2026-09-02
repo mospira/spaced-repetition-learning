@@ -15,6 +15,7 @@ from srl.commands import (
     summary,
     backup,
     rebalance,
+    recall,
 )
 
 
@@ -47,4 +48,5 @@ def build_parser() -> argparse.ArgumentParser:
     summary.add_subparser(subparsers)
     backup.add_subparser(subparsers)
     rebalance.add_subparser(subparsers)
+    recall.add_subparser(subparsers)
     return parser

@@ -262,3 +262,17 @@ def test_config_scheduler_limits(parser):
     )
     assert args.daily_review_limit == 6
     assert args.new_problem_limit == 2
+
+
+def test_recall_pass_by_number(parser):
+    args = parser.parse_args(["recall", "pass", "-n", "3"])
+    assert args.command == "recall"
+    assert args.result == "pass"
+    assert args.number == 3
+    assert hasattr(args, "handler")
+
+
+def test_recall_fail_by_problem(parser):
+    args = parser.parse_args(["recall", "fail", "-p", "Two Sum"])
+    assert args.result == "fail"
+    assert args.name == "Two Sum"

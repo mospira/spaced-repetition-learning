@@ -29,9 +29,12 @@ class DueCandidate:
     attempts: int
     due_date: date
     overdue_days: int
+    full_solve_required: bool = False
 
     @property
     def review_mode(self) -> str:
+        if self.full_solve_required:
+            return "full solve"
         return review_mode(self.rating)
 
 
@@ -77,7 +80,8 @@ def previous_interval_days(entry: dict) -> int | None:
 def make_attempt(entry: dict, rating: int, reviewed_on: date) -> dict:
     """Build a history record and schedule metadata for a completed review."""
     old_due = entry_due_date(entry)
-    previous_interval = previous_interval_days(entry)
+    recall_failed = bool(entry.get("recall_failed_since_last_submission"))
+    previous_interval = None if recall_failed else previous_interval_days(entry)
     interval = next_interval_days(rating, previous_interval)
     due = reviewed_on + timedelta(days=interval)
 
@@ -90,6 +94,8 @@ def make_attempt(entry: dict, rating: int, reviewed_on: date) -> dict:
 
     if previous_interval is not None:
         attempt["previous_interval_days"] = previous_interval
+    if recall_failed:
+        attempt["mastery_blocked"] = True
     if old_due is not None:
         attempt["scheduled_due"] = old_due.isoformat()
         attempt["days_late"] = max(0, (reviewed_on - old_due).days)
@@ -100,6 +106,8 @@ def make_attempt(entry: dict, rating: int, reviewed_on: date) -> dict:
 def apply_attempt_schedule(entry: dict, attempt: dict) -> None:
     entry["interval_days"] = int(attempt["interval_days"])
     entry["due_date"] = attempt["due_date"]
+    entry.pop("recall_failed_since_last_submission", None)
+    entry.pop("full_solve_required", None)
 
 
 def qualifies_for_mastery(history: list[dict]) -> bool:
@@ -108,6 +116,8 @@ def qualifies_for_mastery(history: list[dict]) -> bool:
         return False
 
     last = history[-1]
+    if last.get("mastery_blocked"):
+        return False
     current_date = parse_stored_date(last["date"])
     previous_date = parse_stored_date(history[-2]["date"])
     actual_gap = (current_date - previous_date).days
@@ -124,9 +134,9 @@ def review_mode(rating: int) -> str:
     if rating == 1:
         return "full solve"
     if rating == 2:
-        return "target weak spot"
+        return "full solve: target weak spot"
     if rating == 3:
-        return "pseudocode"
+        return "full solve: plan first"
     return "quick recall"
 
 
@@ -148,6 +158,7 @@ def due_candidates(data: dict, on_date: date) -> list[DueCandidate]:
                 attempts=len(history),
                 due_date=due,
                 overdue_days=(on_date - due).days,
+                full_solve_required=bool(entry.get("full_solve_required")),
             )
         )
     return candidates

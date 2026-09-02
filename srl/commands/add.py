@@ -150,6 +150,12 @@ def _amend_problem(progress_data, entry, name, rating) -> str | None:
         previous_history = entry["history"][:-1]
         base_entry = dict(entry)
         base_entry["history"] = previous_history
+        pending_recall_failure = bool(
+            entry.get("recall_failed_since_last_submission")
+        )
+        pending_full_solve = bool(entry.get("full_solve_required"))
+        base_entry.pop("recall_failed_since_last_submission", None)
+        base_entry.pop("full_solve_required", None)
 
         if previous_history:
             previous = previous_history[-1]
@@ -168,6 +174,10 @@ def _amend_problem(progress_data, entry, name, rating) -> str | None:
         )
         entry["history"][-1] = amended
         apply_attempt_schedule(entry, amended)
+        if pending_recall_failure:
+            entry["recall_failed_since_last_submission"] = True
+        if pending_full_solve:
+            entry["full_solve_required"] = True
     else:
         return f"[bold red]No attempts found for '{name}'[/bold red]"
 

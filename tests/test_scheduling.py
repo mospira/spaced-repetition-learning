@@ -67,6 +67,20 @@ def test_mastery_requires_rating_five_after_thirty_actual_days():
     assert qualifies_for_mastery(mature) is True
 
 
+def test_failed_recall_blocks_mastery():
+    history = [
+        {"rating": 5, "date": "2026-08-01", "interval_days": 30},
+        {
+            "rating": 5,
+            "date": "2026-08-31",
+            "previous_interval_days": 30,
+            "mastery_blocked": True,
+        },
+    ]
+
+    assert qualifies_for_mastery(history) is False
+
+
 def test_balanced_daily_selection_uses_three_three_two_mix():
     due = date(2026, 8, 1)
     candidates = []
