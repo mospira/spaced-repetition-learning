@@ -14,6 +14,7 @@ from srl.commands import (
     ledger,
     summary,
     backup,
+    rebalance,
 )
 
 
@@ -45,4 +46,5 @@ def build_parser() -> argparse.ArgumentParser:
     ledger.add_subparser(subparsers)
     summary.add_subparser(subparsers)
     backup.add_subparser(subparsers)
+    rebalance.add_subparser(subparsers)
     return parser

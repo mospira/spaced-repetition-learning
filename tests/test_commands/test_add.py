@@ -21,16 +21,13 @@ def test_add_new_problem(mock_data, console, load_json):
     assert f"Added rating {rating} for '{problem}'" in output
 
 
-def test_move_problem_to_mastered(mock_data, console, load_json):
+def test_move_problem_to_mastered(mock_data, console, load_json, mature_problem):
     problem = "What is the capital of France?"
     rating = 5
     progress_file = mock_data.PROGRESS_FILE
     mastered_file = mock_data.MASTERED_FILE
 
-    args = SimpleNamespace(name=problem, rating=rating)
-    # call twice with rating 5
-    add.handle(args=args, console=console)
-    add.handle(args=args, console=console)
+    mature_problem(problem)
 
     progress = load_json(progress_file)
     assert problem not in progress
@@ -99,7 +96,7 @@ def test_add_uses_problem_1_when_no_args_provided(
     # Add problem and make due
     problem = "Problem 1"
     add.handle(SimpleNamespace(name=problem, rating=3, number=None), console)
-    backdate_problem(problem, 5)
+    backdate_problem(problem, 8)
 
     console.clear()
 
@@ -121,9 +118,9 @@ def test_add_by_number_valid(console, load_json, backdate_problem, mock_data):
 
     # Add problems and make them due
     add.handle(SimpleNamespace(name=problem1, rating=3, number=None), console)
-    backdate_problem(problem1, 5)
+    backdate_problem(problem1, 8)
     add.handle(SimpleNamespace(name=problem2, rating=3, number=None), console)
-    backdate_problem(problem2, 5)
+    backdate_problem(problem2, 8)
 
     console.clear()
 
@@ -211,7 +208,7 @@ def test_add_by_number_removes_from_nextup(console, load_json, mock_data):
 def test_add_by_number_mastery(console, load_json, backdate_problem, mock_data):
     problem = "Problem to be mastered"
     add.handle(SimpleNamespace(name=problem, rating=5, number=None), console)
-    backdate_problem(problem, 5)
+    backdate_problem(problem, 31)
 
     console.clear()
 
@@ -324,13 +321,16 @@ def test_add_preserves_url_from_nextup(mock_data, console, load_json):
     assert progress[problem]["url"] == url
 
 
-def test_move_problem_with_url_to_mastered(mock_data, console, load_json):
+def test_move_problem_with_url_to_mastered(
+    mock_data, console, load_json, backdate_problem
+):
     problem = "Problem with URL"
     url = "https://example.com"
 
     # Add problem with URL and rating 5
     args = SimpleNamespace(name=problem, rating=5, url=url)
     add.handle(args, console)
+    backdate_problem(problem, 31)
 
     # Add second rating 5 (triggers move to mastered)
     args = SimpleNamespace(name=problem, rating=5)
@@ -402,7 +402,7 @@ def test_amend_with_number_flag(mock_data, console, load_json, backdate_problem)
     add.handle(args=args, console=console)
 
     # Make it due so -n 1 can find it
-    backdate_problem(problem, 5)
+    backdate_problem(problem, 15)
 
     args = SimpleNamespace(name=None, rating=5, number=1, amend=True)
     add.handle(args=args, console=console)
@@ -410,3 +410,22 @@ def test_amend_with_number_flag(mock_data, console, load_json, backdate_problem)
     progress = load_json(mock_data.PROGRESS_FILE)
     assert len(progress[problem]["history"]) == 1
     assert progress[problem]["history"][-1]["rating"] == 5
+
+
+def test_reviewing_mastered_problem_reopens_without_duplicate(
+    mock_data, console, load_json, dump_json
+):
+    problem = "Previously Mastered"
+    dump_json(
+        mock_data.MASTERED_FILE,
+        {problem: {"history": [{"rating": 5, "date": "2026-07-01"}]}},
+    )
+
+    add.handle(SimpleNamespace(name=problem, rating=2), console)
+
+    progress = load_json(mock_data.PROGRESS_FILE)
+    mastered = load_json(mock_data.MASTERED_FILE)
+    assert problem in progress
+    assert problem not in mastered
+    assert len(progress[problem]["history"]) == 2
+    assert progress[problem]["interval_days"] == 3

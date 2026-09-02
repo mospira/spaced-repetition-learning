@@ -48,7 +48,7 @@ def test_take_print_url_from_due_problem(console, backdate_problem):
     console.clear()
 
     # backdate problem so it's due
-    backdate_problem(problem, 5)
+    backdate_problem(problem, 15)
 
     take_args = SimpleNamespace(number=1, action=None, rating=None, url=True)
     take.handle(args=take_args, console=console)
@@ -66,7 +66,7 @@ def test_take_print_problem_from_due_problem_without_url(console, backdate_probl
     console.clear()
 
     # backdate problem so it's due
-    backdate_problem(problem, 5)
+    backdate_problem(problem, 15)
 
     take_args = SimpleNamespace(number=1, action=None, rating=None)
     take.handle(args=take_args, console=console)
@@ -82,7 +82,7 @@ def test_take_reports_missing_url(console, backdate_problem):
     console.clear()
 
     # backdate problem so it's due
-    backdate_problem(problem, 5)
+    backdate_problem(problem, 15)
 
     take_args = SimpleNamespace(number=1, action=None, rating=None, url=True)
     take.handle(args=take_args, console=console)

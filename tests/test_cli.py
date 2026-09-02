@@ -241,3 +241,24 @@ def test_summary_from_date(parser):
     assert args.command == "summary"
     assert hasattr(args, "handler")
     assert args.from_date == "2024-01-15"
+
+
+def test_rebalance_command(parser):
+    args = parser.parse_args(["rebalance", "--daily-cap", "6"])
+    assert args.command == "rebalance"
+    assert args.daily_cap == 6
+    assert hasattr(args, "handler")
+
+
+def test_config_scheduler_limits(parser):
+    args = parser.parse_args(
+        [
+            "config",
+            "--daily-review-limit",
+            "6",
+            "--new-problem-limit",
+            "2",
+        ]
+    )
+    assert args.daily_review_limit == 6
+    assert args.new_problem_limit == 2

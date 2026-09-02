@@ -2,13 +2,10 @@ from srl.commands import mastered, add
 from types import SimpleNamespace
 
 
-def test_mastered_count(console):
+def test_mastered_count(console, mature_problem):
     problem = "Counting Test"
     rating = 5
-    args = SimpleNamespace(name=problem, rating=rating)
-    # call twice should move to mastered
-    add.handle(args, console)
-    add.handle(args, console)
+    mature_problem(problem)
 
     args = SimpleNamespace(count=True)
     mastered.handle(args=args, console=console)
@@ -18,21 +15,29 @@ def test_mastered_count(console):
     assert "1" in output
 
 
-def test_mastered_list_with_items(console, today_string):
+def test_mastered_list_with_items(console, today_string, mock_data, dump_json):
     problem_a = "Problem A"
     problem_b = "Problem B"
 
-    args = SimpleNamespace(name=problem_a, rating=5)
-    add.handle(args, console)
-    add.handle(args, console)
-
-    args = SimpleNamespace(name=problem_b, rating=5)
-    add.handle(args, console)
-    args = SimpleNamespace(name=problem_b, rating=1)
-    add.handle(args, console)
-    args = SimpleNamespace(name=problem_b, rating=5)
-    add.handle(args, console)
-    add.handle(args, console)
+    dump_json(
+        mock_data.MASTERED_FILE,
+        {
+            problem_a: {
+                "history": [
+                    {"rating": 5, "date": "2026-07-01"},
+                    {"rating": 5, "date": today_string},
+                ]
+            },
+            problem_b: {
+                "history": [
+                    {"rating": 5, "date": "2026-05-01"},
+                    {"rating": 1, "date": "2026-06-01"},
+                    {"rating": 5, "date": "2026-07-01"},
+                    {"rating": 5, "date": today_string},
+                ]
+            },
+        },
+    )
 
     args = SimpleNamespace(c=False)
     mastered.handle(args=args, console=console)
@@ -54,17 +59,12 @@ def test_mastered_list_empty(console):
     assert "No mastered problems yet" in output
 
 
-def test_mastered_fuzzy_filter(console):
+def test_mastered_fuzzy_filter(console, mature_problem):
     problem_a = "Problem A"
     problem_b = "Other B"
 
-    args = SimpleNamespace(name=problem_a, rating=5)
-    add.handle(args, console)
-    add.handle(args, console)
-
-    args = SimpleNamespace(name=problem_b, rating=5)
-    add.handle(args, console)
-    add.handle(args, console)
+    mature_problem(problem_a)
+    mature_problem(problem_b)
 
     console.clear()
     args = SimpleNamespace(query="Prob")
@@ -75,12 +75,12 @@ def test_mastered_fuzzy_filter(console):
     assert "Other B" not in output
 
 
-def test_get_mastered_problems_filters_empty_history(console, today_string):
+def test_get_mastered_problems_filters_empty_history(
+    console, today_string, mature_problem
+):
     problem_a = "Problem A"
 
-    args = SimpleNamespace(name=problem_a, rating=5)
-    add.handle(args, console)
-    add.handle(args, console)
+    mature_problem(problem_a)
 
     result = mastered.get_mastered_problems()
     assert len(result) == 1

@@ -8,6 +8,13 @@ from srl.storage import (
     NEXT_UP_FILE,
 )
 from srl.commands.list_ import get_due_problems
+from srl.scheduling import (
+    apply_attempt_schedule,
+    make_attempt,
+    merge_histories,
+    parse_stored_date,
+    qualifies_for_mastery,
+)
 
 
 def add_subparser(subparsers):
@@ -70,9 +77,25 @@ def handle(args, console: Console):
     rating: int = args.rating
     url: str = getattr(args, "url", "")
     progress_data = load_json(PROGRESS_FILE)
+    mastered_data = load_json(MASTERED_FILE)
 
     target_name = _get_canonical_name(progress_data, name)
+    mastered_name = _get_canonical_name(mastered_data, name)
+
     entry: dict = progress_data.get(target_name, {"history": []})
+    if mastered_name in mastered_data:
+        mastered_entry = mastered_data.pop(mastered_name)
+        if target_name in progress_data:
+            entry["history"] = merge_histories(
+                mastered_entry.get("history", []), entry.get("history", [])
+            )
+            if not entry.get("url") and mastered_entry.get("url"):
+                entry["url"] = mastered_entry["url"]
+        else:
+            target_name = mastered_name
+            entry = mastered_entry
+        save_json(MASTERED_FILE, mastered_data)
+
     if getattr(args, "amend", False):
         console.print(f"[yellow]Amending {name}[/yellow]")
         if err := _amend_problem(progress_data, entry, target_name, rating):
@@ -123,18 +146,36 @@ def _amend_problem(progress_data, entry, name, rating) -> str | None:
     if name not in progress_data:
         return f"[bold red]Problem '{name}' not found in progress[/bold red]"
     elif entry["history"]:
-        entry["history"][-1]["rating"] = rating
+        original = entry["history"][-1]
+        previous_history = entry["history"][:-1]
+        base_entry = dict(entry)
+        base_entry["history"] = previous_history
+
+        if previous_history:
+            previous = previous_history[-1]
+            if previous.get("interval_days") is not None:
+                base_entry["interval_days"] = previous["interval_days"]
+                base_entry["due_date"] = previous.get("due_date")
+            else:
+                base_entry.pop("interval_days", None)
+                base_entry.pop("due_date", None)
+        else:
+            base_entry.pop("interval_days", None)
+            base_entry.pop("due_date", None)
+
+        amended = make_attempt(
+            base_entry, rating, parse_stored_date(original["date"])
+        )
+        entry["history"][-1] = amended
+        apply_attempt_schedule(entry, amended)
     else:
         return f"[bold red]No attempts found for '{name}'[/bold red]"
 
 
 def _append_problem(entry, rating):
-    entry["history"].append(
-        {
-            "rating": rating,
-            "date": today().isoformat(),
-        }
-    )
+    attempt = make_attempt(entry, rating, today())
+    entry["history"].append(attempt)
+    apply_attempt_schedule(entry, attempt)
 
 
 def _update_progress_data(progress_data, entry, name) -> str:
@@ -142,7 +183,11 @@ def _update_progress_data(progress_data, entry, name) -> str:
     display_text = _check_mastery(progress_data, entry, name)
     if not display_text:
         progress_data[name] = entry
-        display_text = f"Added rating [yellow]{entry['history'][-1]['rating']}[/yellow] for '[cyan]{name}[/cyan]'"
+        display_text = (
+            f"Added rating [yellow]{entry['history'][-1]['rating']}[/yellow] for "
+            f"'[cyan]{name}[/cyan]'. Next review in "
+            f"[cyan]{entry['interval_days']} day(s)[/cyan] on {entry['due_date']}"
+        )
 
     save_json(PROGRESS_FILE, progress_data)
 
@@ -153,16 +198,16 @@ def _check_mastery(progress_data, entry, name) -> str | None:
     """Returns display_text if moved to mastered, None otherwise"""
     history = entry["history"]
 
-    mastered = (
-        len(history) >= 2 and history[-1]["rating"] == 5 and history[-2]["rating"] == 5
-    )
-
-    if not mastered:
+    if not qualifies_for_mastery(history):
         return None
 
     mastered = load_json(MASTERED_FILE)
     if name in mastered:
-        mastered[name]["history"].extend(history)
+        mastered[name]["history"] = merge_histories(
+            mastered[name].get("history", []), history
+        )
+        if entry.get("url"):
+            mastered[name]["url"] = entry["url"]
     else:
         mastered[name] = entry
     save_json(MASTERED_FILE, mastered)
@@ -178,7 +223,11 @@ def _remove_from_nextup(progress_data, name):
     if name not in next_up:
         return
 
-    if next_up[name].get("url") and not progress_data[name].get("url"):
+    if (
+        name in progress_data
+        and next_up[name].get("url")
+        and not progress_data[name].get("url")
+    ):
         progress_data[name]["url"] = next_up[name]["url"]
         save_json(PROGRESS_FILE, progress_data)
 

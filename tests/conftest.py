@@ -6,6 +6,8 @@ import pathlib
 import json
 from datetime import datetime, timedelta
 from srl import cli
+from srl.commands import add
+from types import SimpleNamespace
 import sys
 
 
@@ -108,6 +110,23 @@ def backdate_problem(load_json, dump_json, mock_data):
             old_date = datetime.fromisoformat(last_entry["date"])
             new_date = (old_date - timedelta(days=days)).isoformat()
             last_entry["date"] = new_date
+            if data[problem].get("due_date"):
+                due_date = datetime.fromisoformat(data[problem]["due_date"])
+                shifted_due = (due_date - timedelta(days=days)).date().isoformat()
+                data[problem]["due_date"] = shifted_due
+                last_entry["due_date"] = shifted_due
             dump_json(progress_path, data)
 
     return _backdate
+
+
+@pytest.fixture
+def mature_problem(console, backdate_problem):
+    """Create a rating-5 problem, wait its 30-day interval, and rate it 5 again."""
+
+    def _mature(name, url=""):
+        add.handle(SimpleNamespace(name=name, rating=5, url=url), console)
+        backdate_problem(name, 31)
+        add.handle(SimpleNamespace(name=name, rating=5), console)
+
+    return _mature

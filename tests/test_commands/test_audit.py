@@ -15,14 +15,10 @@ def test_start_audit_with_no_mastered(console):
     assert "No mastered problems available for audit" in output
 
 
-def test_start_audit_with_mastered(console):
+def test_start_audit_with_mastered(console, mature_problem):
     problem = "Mastered Problem"
     url = "https://example.com"
-    rating = 5
-    args = SimpleNamespace(name=problem, rating=rating, url=url)
-
-    add.handle(args=args, console=console)
-    add.handle(args=args, console=console)
+    mature_problem(problem, url=url)
 
     args = SimpleNamespace()
     handle_run(args=args, console=console)
@@ -33,13 +29,9 @@ def test_start_audit_with_mastered(console):
     assert url in output
 
 
-def test_show_current_audit(console):
+def test_show_current_audit(console, mature_problem):
     problem = "Current Audit"
-    rating = 5
-    args = SimpleNamespace(name=problem, rating=rating)
-
-    add.handle(args=args, console=console)
-    add.handle(args=args, console=console)
+    mature_problem(problem)
 
     args = SimpleNamespace()
     handle_run(args=args, console=console)
@@ -70,7 +62,10 @@ def test_pass_current_audit(console, mock_data, dump_json, load_json):
 
 def test_fail_current_audit(console, mock_data, dump_json, load_json):
     problem = "Audit Fail Problem"
-    dump_json(mock_data.MASTERED_FILE, {problem: {"history": [{"rating": 5}]}})
+    dump_json(
+        mock_data.MASTERED_FILE,
+        {problem: {"history": [{"rating": 5, "date": "2026-08-01"}]}},
+    )
     dump_json(mock_data.AUDIT_FILE, {"current_audit": problem})
 
     args = SimpleNamespace()

@@ -11,6 +11,7 @@ from srl.storage import (
     PROGRESS_FILE,
 )
 from srl.utils import today
+from srl.scheduling import apply_attempt_schedule, make_attempt, merge_histories
 
 
 def get_current_audit():
@@ -73,13 +74,17 @@ def audit_fail(curr, console: Console):
         return
 
     entry = mastered[curr]
+    if curr in progress:
+        progress_entry = progress[curr]
+        entry["history"] = merge_histories(
+            entry.get("history", []), progress_entry.get("history", [])
+        )
+        if not entry.get("url") and progress_entry.get("url"):
+            entry["url"] = progress_entry["url"]
 
-    entry["history"].append(
-        {
-            "rating": 1,
-            "date": today().isoformat(),
-        }
-    )
+    attempt = make_attempt(entry, 1, today())
+    entry["history"].append(attempt)
+    apply_attempt_schedule(entry, attempt)
 
     progress[curr] = entry
     save_json(PROGRESS_FILE, progress)

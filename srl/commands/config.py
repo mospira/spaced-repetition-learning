@@ -11,6 +11,11 @@ from dataclasses import dataclass, field
 class Config:
     audit_probability: float = 0.1
     max_days_without_audit: int = 7
+    daily_review_limit: int = 8
+    new_problem_limit: int = 2
+    overdue_reduce_new_threshold: int = 12
+    overdue_pause_new_threshold: int = 24
+    suppress_audits_when_overdue: bool = True
     calendar_colors: dict[int, str] = field(
         default_factory=lambda: Config.default_calendar_colors()
     )
@@ -66,6 +71,40 @@ def add_subparser(subparsers):
         "--max-days-without-audit",
         type=int,
         help="Maximum days without audit (0 to disable, default: 7)",
+    )
+    parser.add_argument(
+        "--daily-review-limit",
+        type=int,
+        help="Maximum due reviews selected for a normal daily session",
+    )
+    parser.add_argument(
+        "--new-problem-limit",
+        type=int,
+        help="Maximum Next Up problems admitted per day",
+    )
+    parser.add_argument(
+        "--overdue-reduce-new-threshold",
+        type=int,
+        help="Reduce new-problem admission to one above this overdue count",
+    )
+    parser.add_argument(
+        "--overdue-pause-new-threshold",
+        type=int,
+        help="Pause new-problem admission above this overdue count",
+    )
+    audit_suppression = parser.add_mutually_exclusive_group()
+    audit_suppression.add_argument(
+        "--suppress-audits-when-overdue",
+        action="store_true",
+        dest="suppress_audits_when_overdue",
+        default=None,
+        help="Suppress audits when overdue reviews exceed the daily limit",
+    )
+    audit_suppression.add_argument(
+        "--allow-audits-when-overdue",
+        action="store_false",
+        dest="suppress_audits_when_overdue",
+        help="Allow audits even when the review queue exceeds the daily limit",
     )
     parser.add_argument(
         "--max-backups",
@@ -163,19 +202,53 @@ def _handle_updates(cfg: Config, console: Console, args):
 
     updates = [
         (
-            args.audit_probability,
+            getattr(args, "audit_probability", None),
             lambda v: v >= 0,
             lambda v: cfg.set("audit_probability", v),
             lambda v: f"audit probability to [cyan]{v}[/cyan]",
         ),
         (
-            args.max_days_without_audit,
+            getattr(args, "max_days_without_audit", None),
             lambda v: v >= 0,
             lambda v: cfg.set("max_days_without_audit", v),
             lambda v: (
                 "max days without audit to [cyan]disabled[/cyan]"
                 if v == 0
                 else f"max days without audit to [cyan]{v}[/cyan]"
+            ),
+        ),
+        (
+            getattr(args, "daily_review_limit", None),
+            lambda v: v > 0,
+            lambda v: cfg.set("daily_review_limit", v),
+            lambda v: f"daily review limit to [cyan]{v}[/cyan]",
+        ),
+        (
+            getattr(args, "new_problem_limit", None),
+            lambda v: v >= 0,
+            lambda v: cfg.set("new_problem_limit", v),
+            lambda v: f"new problem limit to [cyan]{v}[/cyan]",
+        ),
+        (
+            getattr(args, "overdue_reduce_new_threshold", None),
+            lambda v: v >= 0,
+            lambda v: cfg.set("overdue_reduce_new_threshold", v),
+            lambda v: f"overdue reduce-new threshold to [cyan]{v}[/cyan]",
+        ),
+        (
+            getattr(args, "overdue_pause_new_threshold", None),
+            lambda v: v >= 0,
+            lambda v: cfg.set("overdue_pause_new_threshold", v),
+            lambda v: f"overdue pause-new threshold to [cyan]{v}[/cyan]",
+        ),
+        (
+            getattr(args, "suppress_audits_when_overdue", None),
+            lambda v: isinstance(v, bool),
+            lambda v: cfg.set("suppress_audits_when_overdue", v),
+            lambda v: (
+                "overdue audit suppression to [cyan]enabled[/cyan]"
+                if v
+                else "overdue audit suppression to [cyan]disabled[/cyan]"
             ),
         ),
     ]
@@ -198,10 +271,10 @@ def _handle_updates(cfg: Config, console: Console, args):
 
 def _handle_backup_updates(cfg, args, updated):
     replication_updates = {
-        "max_backups": args.max_backups,
-        "replication_remote_host": args.replication_remote_host,
-        "replication_remote_port": args.replication_remote_port,
-        "replication_enabled": args.replication_enabled,
+        "max_backups": getattr(args, "max_backups", None),
+        "replication_remote_host": getattr(args, "replication_remote_host", None),
+        "replication_remote_port": getattr(args, "replication_remote_port", None),
+        "replication_enabled": getattr(args, "replication_enabled", None),
     }
 
     for key, value in replication_updates.items():
